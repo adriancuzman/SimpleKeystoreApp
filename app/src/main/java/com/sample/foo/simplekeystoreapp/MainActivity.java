@@ -155,7 +155,7 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
-            Cipher inCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding", "AndroidOpenSSL");
+            Cipher inCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
             inCipher.init(Cipher.ENCRYPT_MODE, publicKey);
 
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -175,10 +175,9 @@ public class MainActivity extends AppCompatActivity {
     public void decryptString(String alias) {
         try {
             KeyStore.PrivateKeyEntry privateKeyEntry = (KeyStore.PrivateKeyEntry)keyStore.getEntry(alias, null);
-            RSAPrivateKey privateKey = (RSAPrivateKey) privateKeyEntry.getPrivateKey();
 
-            Cipher output = Cipher.getInstance("RSA/ECB/PKCS1Padding", "AndroidOpenSSL");
-            output.init(Cipher.DECRYPT_MODE, privateKey);
+            Cipher output = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            output.init(Cipher.DECRYPT_MODE, privateKeyEntry.getPrivateKey());
 
             String cipherText = encryptedText.getText().toString();
             CipherInputStream cipherInputStream = new CipherInputStream(
