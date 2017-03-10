@@ -24,14 +24,17 @@ import android.widget.Toast;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
+import java.security.UnrecoverableEntryException;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.ArrayList;
@@ -42,6 +45,7 @@ import java.util.List;
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
+import javax.crypto.NoSuchPaddingException;
 import javax.security.auth.x500.X500Principal;
 
 
@@ -201,25 +205,16 @@ public class MainActivity extends AppCompatActivity {
 
     public void encryptString(String alias) {
         try {
-            KeyStore.PrivateKeyEntry privateKeyEntry = (KeyStore.PrivateKeyEntry)keyStore.getEntry(alias, null);
-            RSAPublicKey publicKey = (RSAPublicKey) privateKeyEntry.getCertificate().getPublicKey();
-
             String initialText = startText.getText().toString();
             if(initialText.isEmpty()) {
                 Toast.makeText(this, "Enter text in the 'Initial Text' widget", Toast.LENGTH_LONG).show();
                 return;
             }
 
-            Cipher inCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-            inCipher.init(Cipher.ENCRYPT_MODE, publicKey);
+            byte[] inputBytes = initialText.getBytes("UTF-8");
 
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            CipherOutputStream cipherOutputStream = new CipherOutputStream(
-                    outputStream, inCipher);
-            cipherOutputStream.write(initialText.getBytes("UTF-8"));
-            cipherOutputStream.close();
+            byte[] vals = encrypt(alias, inputBytes);
 
-            byte [] vals = outputStream.toByteArray();
             encryptedText.setText(Base64.encodeToString(vals, Base64.DEFAULT));
         } catch (Exception e) {
             Toast.makeText(this, "Exception " + e.getMessage() + " occured", Toast.LENGTH_LONG).show();
@@ -227,26 +222,29 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private byte[] encrypt(String alias, byte[] inputBytes) throws NoSuchAlgorithmException, NoSuchPaddingException, InvalidKeyException, IOException, UnrecoverableEntryException, KeyStoreException {
+        KeyStore.PrivateKeyEntry privateKeyEntry = (KeyStore.PrivateKeyEntry)keyStore.getEntry(alias, null);
+        RSAPublicKey publicKey = (RSAPublicKey) privateKeyEntry.getCertificate().getPublicKey();
+
+        Cipher inCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        inCipher.init(Cipher.ENCRYPT_MODE, publicKey);
+
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        CipherOutputStream cipherOutputStream = new CipherOutputStream(
+                outputStream, inCipher);
+        cipherOutputStream.write(inputBytes);
+        cipherOutputStream.close();
+
+        return outputStream.toByteArray();
+    }
+
     public void decryptString(String alias) {
         try {
-            KeyStore.PrivateKeyEntry privateKeyEntry = (KeyStore.PrivateKeyEntry)keyStore.getEntry(alias, null);
-
-            Cipher output = Cipher.getInstance("RSA/ECB/PKCS1Padding");
-            output.init(Cipher.DECRYPT_MODE, privateKeyEntry.getPrivateKey());
-
             String cipherText = encryptedText.getText().toString();
-            CipherInputStream cipherInputStream = new CipherInputStream(
-                    new ByteArrayInputStream(Base64.decode(cipherText, Base64.DEFAULT)), output);
-            ArrayList<Byte> values = new ArrayList<>();
-            int nextByte;
-            while ((nextByte = cipherInputStream.read()) != -1) {
-                values.add((byte)nextByte);
-            }
 
-            byte[] bytes = new byte[values.size()];
-            for(int i = 0; i < bytes.length; i++) {
-                bytes[i] = values.get(i).byteValue();
-            }
+            byte[] inputBytes = Base64.decode(cipherText, Base64.DEFAULT);
+
+            byte[] bytes = decrypt(alias, inputBytes);
 
             String finalText = new String(bytes, 0, bytes.length, "UTF-8");
             decryptedText.setText(finalText);
@@ -255,6 +253,27 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Exception " + e.getMessage() + " occured", Toast.LENGTH_LONG).show();
             Log.e(TAG, Log.getStackTraceString(e));
         }
+    }
+
+    private byte[] decrypt(String alias, byte[] inputBytes) throws NoSuchAlgorithmException, UnrecoverableEntryException, KeyStoreException, NoSuchPaddingException, InvalidKeyException, IOException {
+        KeyStore.PrivateKeyEntry privateKeyEntry = (KeyStore.PrivateKeyEntry)keyStore.getEntry(alias, null);
+
+        Cipher output = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+        output.init(Cipher.DECRYPT_MODE, privateKeyEntry.getPrivateKey());
+
+        CipherInputStream cipherInputStream = new CipherInputStream(
+                new ByteArrayInputStream(inputBytes), output);
+        ArrayList<Byte> values = new ArrayList<>();
+        int nextByte;
+        while ((nextByte = cipherInputStream.read()) != -1) {
+            values.add((byte)nextByte);
+        }
+
+        byte[] bytes = new byte[values.size()];
+        for(int i = 0; i < bytes.length; i++) {
+            bytes[i] = values.get(i).byteValue();
+        }
+        return bytes;
     }
 
     public class KeyRecyclerAdapter extends ArrayAdapter<String> {
