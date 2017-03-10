@@ -2,8 +2,12 @@ package com.sample.foo.simplekeystoreapp;
 
 import android.content.Context;
 import android.content.DialogInterface;
+import android.os.Build;
 import android.security.KeyPairGeneratorSpec;
 import android.os.Bundle;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.support.annotation.NonNull;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Base64;
@@ -21,12 +25,15 @@ import android.widget.Toast;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
-import java.security.interfaces.RSAPrivateKey;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.interfaces.RSAPublicKey;
+import java.security.spec.AlgorithmParameterSpec;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Enumeration;
@@ -95,26 +102,74 @@ public class MainActivity extends AppCompatActivity {
         try {
             // Create new key if needed
             if (!keyStore.containsAlias(alias)) {
-                Calendar start = Calendar.getInstance();
-                Calendar end = Calendar.getInstance();
-                end.add(Calendar.YEAR, 1);
-                KeyPairGeneratorSpec spec = new KeyPairGeneratorSpec.Builder(this)
-                        .setAlias(alias)
-                        .setSubject(new X500Principal("CN=Sample Name, O=Android Authority"))
-                        .setSerialNumber(BigInteger.ONE)
-                        .setStartDate(start.getTime())
-                        .setEndDate(end.getTime())
-                        .build();
-                KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA", "AndroidKeyStore");
-                generator.initialize(spec);
 
-                KeyPair keyPair = generator.generateKeyPair();
+                generateRSAKeyPair(alias);
             }
         } catch (Exception e) {
             Toast.makeText(this, "Exception " + e.getMessage() + " occured", Toast.LENGTH_LONG).show();
             Log.e(TAG, Log.getStackTraceString(e));
         }
         refreshKeys();
+    }
+
+    private void generateRSAKeyPair(String alias) throws NoSuchAlgorithmException, NoSuchProviderException, InvalidAlgorithmParameterException {
+        AlgorithmParameterSpec spec = getAlgorithmParameterSpec(alias);
+
+        KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA", "AndroidKeyStore");
+        generator.initialize(spec);
+
+        KeyPair keyPair = generator.generateKeyPair();
+    }
+
+    @NonNull
+    private AlgorithmParameterSpec getAlgorithmParameterSpec(String alias) {
+        AlgorithmParameterSpec spec;
+
+        Calendar start = Calendar.getInstance();
+        Calendar end = Calendar.getInstance();
+        end.add(Calendar.YEAR, 1);
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            spec = getSpecForOldAndroid(alias, start, end);
+
+
+        } else {
+            spec = getSpecForNewAndroid(alias, start, end);
+
+        }
+        return spec;
+    }
+
+    @NonNull
+    private AlgorithmParameterSpec getSpecForNewAndroid(String alias, Calendar start, Calendar end) {
+        AlgorithmParameterSpec spec;// On Android M or above, use the KeyGenparameterSpec.Builder and specify permitted
+        // properties  and restrictions of the key.
+        spec = new KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setCertificateSubject(new X500Principal("CN=" + alias))
+                .setCertificateSerialNumber(BigInteger.valueOf(1337))
+                .setCertificateNotBefore(start.getTime())
+                .setCertificateNotAfter(end.getTime())
+                .build();
+        return spec;
+    }
+
+    @NonNull
+    private AlgorithmParameterSpec getSpecForOldAndroid(String alias, Calendar start, Calendar end) {
+        AlgorithmParameterSpec spec;// Below Android M, use the KeyPairGeneratorSpec.Builder.
+
+        spec = new KeyPairGeneratorSpec.Builder(this)
+                // You'll use the alias later to retrieve the key.  It's a key for the key!
+                .setAlias(alias)
+                // The subject used for the self-signed certificate of the generated pair
+                .setSubject(new X500Principal("CN=" + alias+", O=Android Authority"))
+                // The serial number used for the self-signed certificate of the
+                // generated pair.
+                .setSerialNumber(BigInteger.valueOf(1337))
+                // Date range of validity for the generated pair.
+                .setStartDate(start.getTime())
+                .setEndDate(end.getTime())
+                .build();
+        return spec;
     }
 
     public void deleteKey(final String alias) {
