@@ -149,10 +149,11 @@ public class MainActivity extends AppCompatActivity {
         AlgorithmParameterSpec spec;// On Android M or above, use the KeyGenparameterSpec.Builder and specify permitted
         // properties  and restrictions of the key.
         spec = new KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
-                .setCertificateSubject(new X500Principal("CN=" + alias))
+                .setCertificateSubject(new X500Principal("CN=" + alias+", O=Android Authority"))
                 .setCertificateSerialNumber(BigInteger.valueOf(1337))
                 .setCertificateNotBefore(start.getTime())
                 .setCertificateNotAfter(end.getTime())
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
                 .build();
         return spec;
     }
